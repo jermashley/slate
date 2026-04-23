@@ -1,0 +1,20 @@
+# macOS
+.DS_Store
+
+# Swift Package Manager
+.build/
+.swiftpm/
+
+# Xcode
+DerivedData/
+*.xcworkspace
+*.xcodeproj/project.xcworkspace/
+xcuserdata/
+
+# Distribution artifacts
+dist/
+
+# Logs and temp files
+*.log
+*.tmp
+*.swp
