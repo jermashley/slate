@@ -5,12 +5,22 @@ final class WorkspaceModel: ObservableObject {
     @Published var tabs: [TerminalTab]
     @Published var selectedTabID: TerminalTab.ID?
     @Published var pendingCloseTabID: TerminalTab.ID?
+    @Published var isCommandHistorySearchPresented = false
 
     init(settings: SettingsStore) {
-        let initialTab = Self.makeTab(settings: settings)
-        tabs = [initialTab]
-        selectedTabID = initialTab.id
-        installExitHandler(for: initialTab)
+        let restoredSessions = BlockSessionStore.shared.loadSessions()
+        if restoredSessions.isEmpty {
+            let initialTab = Self.makeTab(settings: settings)
+            tabs = [initialTab]
+            selectedTabID = initialTab.id
+            installExitHandler(for: initialTab)
+        } else {
+            tabs = restoredSessions.map { session in
+                Self.makeTab(settings: settings, restoredSession: session)
+            }
+            selectedTabID = tabs.first?.id
+            tabs.forEach(installExitHandler)
+        }
     }
 
     var selectedTab: TerminalTab? {
@@ -87,6 +97,18 @@ final class WorkspaceModel: ObservableObject {
         }
     }
 
+    func showCommandHistorySearch() {
+        isCommandHistorySearchPresented = true
+    }
+
+    func insertCommandFromHistory(_ command: String) {
+        selectedTab?.blockController?.insertCommand(command)
+    }
+
+    func rerunCommandFromHistory(_ command: String) {
+        selectedTab?.blockController?.rerunCommand(command)
+    }
+
     func clearSelectedTabHistory() {
         selectedTab?.clearHistory()
         selectedTab?.focus()
@@ -94,6 +116,10 @@ final class WorkspaceModel: ObservableObject {
 
     private static func makeTab(settings: SettingsStore) -> TerminalTab {
         TerminalTab(style: settings.sessionStyle, settings: settings)
+    }
+
+    private static func makeTab(settings: SettingsStore, restoredSession: PersistedSession) -> TerminalTab {
+        TerminalTab(style: .block, settings: settings, id: restoredSession.id, restoredSession: restoredSession)
     }
 
     private func installExitHandler(for tab: TerminalTab) {

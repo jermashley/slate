@@ -56,6 +56,12 @@ struct SlateCommands: Commands {
             .keyboardShortcut("f", modifiers: [.command])
             .disabled(workspace == nil)
 
+            Button("Search Command History") {
+                workspace?.showCommandHistorySearch()
+            }
+            .keyboardShortcut("r", modifiers: [.command, .shift])
+            .disabled(workspace == nil)
+
             Button("Clear History") {
                 workspace?.clearSelectedTabHistory()
             }

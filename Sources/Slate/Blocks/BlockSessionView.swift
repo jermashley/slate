@@ -5,6 +5,7 @@ struct BlockSessionView: View {
     @ObservedObject var controller: BlockSessionController
     @EnvironmentObject private var settings: SettingsStore
     @State private var composerHeight: CGFloat = 30
+    @State private var isFollowingOutput = true
 
     private let composerMinHeight: CGFloat = 30
     private let composerMaxHeight: CGFloat = 132
@@ -31,7 +32,11 @@ struct BlockSessionView: View {
                     .padding(.top, 54)
                     .padding(.bottom, 14)
                 }
+                .simultaneousGesture(DragGesture().onChanged { _ in
+                    isFollowingOutput = false
+                })
                 .onChange(of: controller.blocks.count) { _, _ in
+                    isFollowingOutput = true
                     scrollToLatestBlock(proxy: proxy)
                 }
                 .onChange(of: controller.followScrollRequest) { _, _ in
@@ -144,7 +149,7 @@ struct BlockSessionView: View {
     }
 
     private func scrollToLatestBlock(proxy: ScrollViewProxy) {
-        guard let last = controller.blocks.last else { return }
+        guard isFollowingOutput, let last = controller.blocks.last else { return }
         DispatchQueue.main.async {
             withAnimation(.easeOut(duration: 0.16)) {
                 proxy.scrollTo(last.id, anchor: .bottom)
@@ -451,6 +456,31 @@ private struct CommandComposer: NSViewRepresentable {
 
             if commandSelector == #selector(NSResponder.moveUp(_:)) {
                 return parent.onMoveSuggestion(-1)
+            }
+
+            if commandSelector == #selector(NSResponder.moveToBeginningOfLine(_:)) {
+                textView.moveToBeginningOfLine(nil)
+                return true
+            }
+
+            if commandSelector == #selector(NSResponder.moveToEndOfLine(_:)) {
+                textView.moveToEndOfLine(nil)
+                return true
+            }
+
+            if commandSelector == #selector(NSResponder.deleteToBeginningOfLine(_:)) {
+                textView.deleteToBeginningOfLine(nil)
+                return true
+            }
+
+            if commandSelector == #selector(NSResponder.deleteToEndOfLine(_:)) {
+                textView.deleteToEndOfLine(nil)
+                return true
+            }
+
+            if commandSelector == #selector(NSResponder.deleteWordBackward(_:)) {
+                textView.deleteWordBackward(nil)
+                return true
             }
 
             if commandSelector == #selector(NSResponder.insertNewline(_:)) {

@@ -60,6 +60,16 @@ struct RootView: View {
         } message: {
             Text("A shell is still running in this tab. Closing it will terminate the current session.")
         }
+        .sheet(isPresented: $workspace.isCommandHistorySearchPresented) {
+            CommandHistorySearchView(
+                onInsert: { command in
+                    workspace.insertCommandFromHistory(command)
+                },
+                onRerun: { command in
+                    workspace.rerunCommandFromHistory(command)
+                }
+            )
+        }
     }
 
     private var tabBarView: some View {

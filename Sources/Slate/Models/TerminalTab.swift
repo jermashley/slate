@@ -3,13 +3,14 @@ import Foundation
 
 @MainActor
 final class TerminalTab: ObservableObject, Identifiable {
-    let id = UUID()
+    let id: UUID
     let style: SessionStyle
     let classicController: TerminalSessionController?
     let blockController: BlockSessionController?
     private var cancellables: Set<AnyCancellable> = []
 
-    init(style: SessionStyle, settings: SettingsStore) {
+    init(style: SessionStyle, settings: SettingsStore, id: UUID = UUID(), restoredSession: PersistedSession? = nil) {
+        self.id = id
         self.style = style
         switch style {
         case .classic:
@@ -17,7 +18,7 @@ final class TerminalTab: ObservableObject, Identifiable {
             self.blockController = nil
         case .block:
             self.classicController = nil
-            self.blockController = BlockSessionController(tabID: id, settings: settings)
+            self.blockController = BlockSessionController(tabID: id, settings: settings, restoredSession: restoredSession)
         }
 
         classicController?.objectWillChange.sink { [weak self] _ in

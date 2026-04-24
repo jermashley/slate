@@ -28,6 +28,8 @@ final class BlockSessionController: NSObject, ObservableObject {
 
     let rawTerminalView: BlockCaptureTerminalView
     private let processHost = BlockProcessHost()
+    private let completionEngine: BlockCompletionEngine
+    private let sessionStore: BlockSessionStore
 
     private let tabID: UUID
     private let shell: String
@@ -37,17 +39,32 @@ final class BlockSessionController: NSObject, ObservableObject {
     private var shellIntegrationReady = false
     private var activeBlockID: UUID?
     private var foregroundPollTask: Task<Void, Never>?
+    private var persistenceTask: Task<Void, Never>?
     private var isApplyingHistorySelection = false
     private var suppressNextDraftChange = false
 
-    init(tabID: UUID, settings: SettingsStore) {
+    init(tabID: UUID, settings: SettingsStore, restoredSession: PersistedSession? = nil, sessionStore: BlockSessionStore = .shared) {
         self.tabID = tabID
-        self.shell = settings.resolvedShell
-        self.startupDirectory = settings.resolvedStartupDirectory
-        self.currentDirectory = settings.resolvedStartupDirectory
+        self.shell = restoredSession?.shell ?? settings.resolvedShell
+        self.startupDirectory = restoredSession?.startupDirectory ?? settings.resolvedStartupDirectory
+        self.currentDirectory = restoredSession?.currentDirectory ?? restoredSession?.startupDirectory ?? settings.resolvedStartupDirectory
         self.rawTerminalView = BlockCaptureTerminalView(frame: .zero)
+        self.completionEngine = BlockCompletionEngine(shell: restoredSession?.shell ?? settings.resolvedShell)
+        self.sessionStore = sessionStore
         super.init()
 
+        if let restoredSession {
+            self.blocks = restoredSession.blocks.map { persistedBlock in
+                var block = persistedBlock.terminalBlock
+                if [.submitted, .running, .rawTerminal].contains(block.state) {
+                    block.state = .interrupted
+                    block.endedAt = block.endedAt ?? Date()
+                    block.exitCode = block.exitCode ?? 130
+                }
+                return block
+            }
+            self.title = restoredSession.title
+        }
         apply(settings: settings)
         processHost.onDataReceived = { [weak self] slice in
             Task { @MainActor in
@@ -60,6 +77,7 @@ final class BlockSessionController: NSObject, ObservableObject {
             }
         }
         updateDisplayedTitle()
+        persistSession()
 
         if isSupportedShell {
             isRunning = false
@@ -157,10 +175,11 @@ final class BlockSessionController: NSObject, ObservableObject {
             return
         }
 
-        completions = BlockCompletionEngine.suggestions(for: CompletionContext(
+        completions = completionEngine.suggestions(for: CompletionContext(
             text: draftCommand,
             currentDirectory: currentDirectory,
-            history: blocks.map(\.command)
+            history: blocks.map(\.command),
+            shell: shell
         ))
         selectedCompletionIndex = min(selectedCompletionIndex, max(0, completions.count - 1))
         suggestionMode = completions.isEmpty ? .none : .completion
@@ -188,7 +207,7 @@ final class BlockSessionController: NSObject, ObservableObject {
             return true
         }
 
-        draftCommand = BlockCompletionEngine.apply(completions[selectedCompletionIndex], to: draftCommand)
+        draftCommand = completionEngine.apply(completions[selectedCompletionIndex], to: draftCommand)
         draftDidChange()
         focusComposer()
         return true
@@ -240,6 +259,7 @@ final class BlockSessionController: NSObject, ObservableObject {
         )
         activeBlockID = block.id
         blocks.append(block)
+        persistSession()
 
         processHost.send(text: command + "\n")
     }
@@ -249,14 +269,27 @@ final class BlockSessionController: NSObject, ObservableObject {
         submitDraft()
     }
 
+    func insertCommand(_ command: String) {
+        draftCommand = command
+        dismissSuggestions()
+        focusComposer()
+    }
+
+    func rerunCommand(_ command: String) {
+        draftCommand = command
+        submitDraft()
+    }
+
     func toggleCollapsed(_ block: TerminalBlock) {
         guard let index = blocks.firstIndex(where: { $0.id == block.id }) else { return }
         blocks[index].isCollapsed.toggle()
+        persistSession()
     }
 
     func clearHistory() {
         blocks.removeAll()
         activeBlockID = nil
+        sessionStore.clearSession(id: tabID)
     }
 
     func copyCommand(_ block: TerminalBlock) {
@@ -281,11 +314,14 @@ final class BlockSessionController: NSObject, ObservableObject {
             blocks[index].state = .interrupted
             blocks[index].endedAt = Date()
             blocks[index].exitCode = 130
+            persistSession()
         }
     }
 
     func terminate() {
         stopForegroundPolling()
+        persistenceTask?.cancel()
+        persistSession()
         processHost.terminate()
     }
 
@@ -319,6 +355,7 @@ final class BlockSessionController: NSObject, ObservableObject {
         if !visible.isEmpty, let index = activeBlockIndex, shellIntegrationReady, blocks[index].state != .submitted {
             blocks[index].output += visible
             followScrollRequest = UUID()
+            schedulePersistence()
         }
     }
 
@@ -333,6 +370,7 @@ final class BlockSessionController: NSObject, ObservableObject {
             if let index = activeBlockIndex {
                 blocks[index].state = .running
                 blocks[index].startedAt = blocks[index].startedAt ?? Date()
+                persistSession()
             } else if let command, !command.isEmpty {
                 let block = TerminalBlock(
                     command: command,
@@ -343,10 +381,12 @@ final class BlockSessionController: NSObject, ObservableObject {
                 )
                 activeBlockID = block.id
                 blocks.append(block)
+                persistSession()
             }
         case .outputStart:
             if let index = activeBlockIndex {
                 blocks[index].state = .running
+                persistSession()
             }
         case let .commandFinished(status):
             if let index = activeBlockIndex {
@@ -355,10 +395,12 @@ final class BlockSessionController: NSObject, ObservableObject {
                 blocks[index].state = status == 0 ? .succeeded : .failed
                 activeBlockID = nil
                 followScrollRequest = UUID()
+                persistSession()
             }
         case let .cwd(directory):
             currentDirectory = directory
             updateDisplayedTitle()
+            persistSession()
         }
     }
 
@@ -470,8 +512,29 @@ final class BlockSessionController: NSObject, ObservableObject {
             blocks[index].endedAt = Date()
             blocks[index].state = (exitCode == 0) ? .succeeded : .interrupted
             activeBlockID = nil
+            persistSession()
         }
         unsupportedShellMessage = "The Block Mode shell exited\(Self.describeTermination(exitCode)). New commands cannot run in this tab."
+    }
+
+    private func persistSession() {
+        sessionStore.saveSession(
+            id: tabID,
+            shell: shell,
+            startupDirectory: startupDirectory,
+            currentDirectory: currentDirectory,
+            title: title,
+            blocks: blocks
+        )
+    }
+
+    private func schedulePersistence() {
+        persistenceTask?.cancel()
+        persistenceTask = Task { [weak self] in
+            try? await Task.sleep(nanoseconds: 350_000_000)
+            guard !Task.isCancelled, let self else { return }
+            self.persistSession()
+        }
     }
     
     private static func describeTermination(_ status: Int32?) -> String {
