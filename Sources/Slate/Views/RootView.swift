@@ -19,10 +19,7 @@ struct RootView: View {
         .background(Color(nsColor: .textBackgroundColor))
         .foregroundStyle(Color(nsColor: .textColor))
         .background(
-            WindowConfigurator(
-                backgroundColor: .windowBackgroundColor,
-                accessory: titlebarAccessory
-            )
+            WindowConfigurator(accessory: titlebarAccessory)
         )
         .onAppear {
             NSApp.activate(ignoringOtherApps: true)
@@ -72,10 +69,8 @@ struct RootView: View {
         .padding(.trailing, 12)
         .frame(height: 38)
         .frame(maxWidth: .infinity)
-        .background(.bar)
-        .slateTitlebarGlass()
         .overlay(alignment: .bottom) {
-            Divider().opacity(0.18)
+            Divider()
         }
     }
 
@@ -125,17 +120,6 @@ struct RootView: View {
                 }
             }
         )
-    }
-}
-
-private extension View {
-    @ViewBuilder
-    func slateTitlebarGlass() -> some View {
-        if #available(macOS 26.0, *) {
-            self.glassEffect(in: Rectangle())
-        } else {
-            self
-        }
     }
 }
 
@@ -194,10 +178,10 @@ struct TabChip: View {
         .background {
             if isSelected {
                 RoundedRectangle(cornerRadius: 7, style: .continuous)
-                    .fill(Color(nsColor: .selectedControlColor).opacity(0.28))
+                    .fill(Color(nsColor: .selectedContentBackgroundColor).opacity(0.18))
             } else if isHovered {
                 RoundedRectangle(cornerRadius: 7, style: .continuous)
-                    .fill(Color(nsColor: .controlBackgroundColor).opacity(0.5))
+                    .fill(Color(nsColor: .quaternaryLabelColor))
             }
         }
         .clipShape(RoundedRectangle(cornerRadius: 7, style: .continuous))

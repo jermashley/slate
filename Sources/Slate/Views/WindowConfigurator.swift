@@ -2,11 +2,10 @@ import AppKit
 import SwiftUI
 
 struct WindowConfigurator<Accessory: View>: NSViewRepresentable {
-    let backgroundColor: NSColor
     let accessory: Accessory
 
     func makeCoordinator() -> Coordinator {
-        Coordinator(backgroundColor: backgroundColor, accessory: accessory)
+        Coordinator(accessory: accessory)
     }
 
     func makeNSView(context: Context) -> NSView {
@@ -18,7 +17,6 @@ struct WindowConfigurator<Accessory: View>: NSViewRepresentable {
     }
 
     func updateNSView(_ nsView: NSView, context: Context) {
-        context.coordinator.backgroundColor = backgroundColor
         context.coordinator.updateAccessory(accessory)
         DispatchQueue.main.async {
             context.coordinator.configure(window: nsView.window)
@@ -27,13 +25,11 @@ struct WindowConfigurator<Accessory: View>: NSViewRepresentable {
 
     @MainActor
     final class Coordinator {
-        var backgroundColor: NSColor
         private var hostingView: NSHostingView<Accessory>
         private var accessoryController: NSTitlebarAccessoryViewController?
         private weak var configuredWindow: NSWindow?
 
-        init(backgroundColor: NSColor, accessory: Accessory) {
-            self.backgroundColor = backgroundColor
+        init(accessory: Accessory) {
             self.hostingView = NSHostingView(rootView: accessory)
             self.hostingView.translatesAutoresizingMaskIntoConstraints = false
         }
@@ -48,9 +44,7 @@ struct WindowConfigurator<Accessory: View>: NSViewRepresentable {
 
             configuredWindow = window
             window.titleVisibility = .hidden
-            window.titlebarAppearsTransparent = true
-            window.backgroundColor = .windowBackgroundColor
-            window.isOpaque = true
+            window.titlebarAppearsTransparent = false
             window.toolbarStyle = .unified
             window.toolbar = toolbar(for: window)
 
