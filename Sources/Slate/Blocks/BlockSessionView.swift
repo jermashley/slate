@@ -55,18 +55,21 @@ struct BlockSessionView: View {
                         focusToken: controller.focusToken,
                         isEnabled: controller.isSupportedShell && controller.isRunning,
                         fontSize: settings.fontSize,
-                        hasCompletions: !controller.completions.isEmpty,
+                        hasSuggestions: !controller.visibleSuggestions.isEmpty,
                         onTextChange: {
                             controller.draftDidChange()
                         },
-                        onAcceptCompletion: {
-                            controller.acceptSelectedCompletion()
+                        onAcceptSuggestion: {
+                            controller.acceptSelectedSuggestion()
                         },
-                        onMoveCompletion: { delta in
-                            controller.moveCompletionSelection(delta: delta)
+                        onMoveSuggestion: { delta in
+                            controller.moveSuggestionSelection(delta: delta)
                         },
                         onSubmit: {
                             controller.submitDraft()
+                        },
+                        onDismissSuggestions: {
+                            controller.dismissSuggestions()
                         },
                         onInterrupt: {
                             controller.interrupt()
@@ -98,16 +101,17 @@ struct BlockSessionView: View {
                     .frame(height: 1)
             }
             .overlay(alignment: .topLeading) {
-                if !controller.completions.isEmpty {
-                    CompletionPanel(
-                        suggestions: controller.completions,
+                if !controller.visibleSuggestions.isEmpty {
+                    CommandSuggestionPanel(
+                        suggestions: controller.visibleSuggestions,
                         selectedIndex: controller.selectedCompletionIndex,
                         onSelect: { index in
                             controller.selectedCompletionIndex = index
-                            _ = controller.acceptSelectedCompletion()
+                            _ = controller.acceptSelectedSuggestion()
                         }
                     )
-                    .offset(x: contentHorizontalPadding + 20, y: -min(CGFloat(controller.completions.count) * 30 + 10, 190))
+                    .padding(.horizontal, contentHorizontalPadding)
+                    .offset(y: -suggestionPanelHeight)
                 }
             }
         }
@@ -123,7 +127,6 @@ struct BlockSessionView: View {
         .onChange(of: settings.fontName) { _, _ in controller.apply(settings: settings) }
         .onChange(of: settings.fontSize) { _, _ in controller.apply(settings: settings) }
         .onChange(of: settings.cursorStyleRaw) { _, _ in controller.apply(settings: settings) }
-        .onChange(of: controller.draftCommand) { _, _ in controller.draftDidChange() }
     }
 
     private func unsupportedShell(_ message: String) -> some View {
@@ -148,13 +151,16 @@ struct BlockSessionView: View {
             }
         }
     }
+
+    private var suggestionPanelHeight: CGFloat {
+        min(CGFloat(controller.visibleSuggestions.count), 7) * 30 + 10
+    }
 }
 
 private struct BlockRow: View {
     let block: TerminalBlock
     @ObservedObject var controller: BlockSessionController
     @EnvironmentObject private var settings: SettingsStore
-    @State private var outputHeight: CGFloat = 1
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -188,9 +194,7 @@ private struct BlockRow: View {
                         .frame(minHeight: 300)
                         .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
                 } else if !block.output.isEmpty {
-                    OutputTextView(text: block.output, fontSize: settings.fontSize, measuredHeight: $outputHeight)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .frame(height: outputHeight)
+                    OutputText(text: block.output, fontSize: settings.fontSize)
                 }
             }
         }
@@ -294,33 +298,33 @@ private struct BlockRawTerminalView: NSViewRepresentable {
     }
 }
 
-private struct CompletionPanel: View {
+private struct CommandSuggestionPanel: View {
     let suggestions: [CompletionSuggestion]
     let selectedIndex: Int
     let onSelect: (Int) -> Void
 
     var body: some View {
         VStack(spacing: 2) {
-            ForEach(Array(suggestions.prefix(6).enumerated()), id: \.element.id) { index, suggestion in
+            ForEach(Array(suggestions.prefix(7).enumerated()), id: \.element.id) { index, suggestion in
                 Button {
                     onSelect(index)
                 } label: {
-                    HStack(spacing: 10) {
+                    HStack(spacing: 12) {
                         Text(suggestion.title)
-                            .font(.system(size: 12.5, weight: .medium, design: .monospaced))
+                            .font(.system(size: 13, weight: .regular, design: .monospaced))
                             .foregroundStyle(index == selectedIndex ? Color(nsColor: .selectedMenuItemTextColor) : Color.primary)
                             .lineLimit(1)
                         Spacer(minLength: 16)
                         Text(suggestion.detail)
-                            .font(.system(size: 11.5))
+                            .font(.system(size: 12))
                             .foregroundStyle(index == selectedIndex ? Color(nsColor: .selectedMenuItemTextColor).opacity(0.72) : Color.secondary)
                     }
-                    .padding(.horizontal, 10)
+                    .padding(.horizontal, 12)
                     .frame(height: 28)
                     .contentShape(Rectangle())
                     .background {
                         if index == selectedIndex {
-                            RoundedRectangle(cornerRadius: 5, style: .continuous)
+                            RoundedRectangle(cornerRadius: 4, style: .continuous)
                                 .fill(Color(nsColor: .controlAccentColor))
                         }
                     }
@@ -329,13 +333,13 @@ private struct CompletionPanel: View {
             }
         }
         .padding(5)
-        .frame(width: 360)
+        .frame(maxWidth: .infinity)
         .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
         .overlay {
             RoundedRectangle(cornerRadius: 8, style: .continuous)
-                .stroke(Color(nsColor: .separatorColor).opacity(0.45), lineWidth: 1)
+                .stroke(Color(nsColor: .separatorColor).opacity(0.5), lineWidth: 1)
         }
-        .shadow(color: .black.opacity(0.14), radius: 18, y: 8)
+        .shadow(color: .black.opacity(0.12), radius: 18, y: 8)
     }
 }
 
@@ -347,11 +351,12 @@ private struct CommandComposer: NSViewRepresentable {
     let focusToken: UUID
     let isEnabled: Bool
     let fontSize: Double
-    let hasCompletions: Bool
+    let hasSuggestions: Bool
     let onTextChange: () -> Void
-    let onAcceptCompletion: () -> Bool
-    let onMoveCompletion: (Int) -> Bool
+    let onAcceptSuggestion: () -> Bool
+    let onMoveSuggestion: (Int) -> Bool
     let onSubmit: () -> Void
+    let onDismissSuggestions: () -> Void
     let onInterrupt: () -> Void
 
     func makeCoordinator() -> Coordinator {
@@ -437,15 +442,15 @@ private struct CommandComposer: NSViewRepresentable {
 
         func textView(_ textView: NSTextView, doCommandBy commandSelector: Selector) -> Bool {
             if commandSelector == #selector(NSResponder.insertTab(_:)) {
-                return parent.onAcceptCompletion()
+                return parent.onAcceptSuggestion()
             }
 
             if commandSelector == #selector(NSResponder.moveDown(_:)) {
-                return parent.onMoveCompletion(1)
+                return parent.onMoveSuggestion(1)
             }
 
             if commandSelector == #selector(NSResponder.moveUp(_:)) {
-                return parent.onMoveCompletion(-1)
+                return parent.onMoveSuggestion(-1)
             }
 
             if commandSelector == #selector(NSResponder.insertNewline(_:)) {
@@ -466,6 +471,10 @@ private struct CommandComposer: NSViewRepresentable {
             }
 
             if commandSelector == #selector(NSResponder.cancelOperation(_:)) {
+                if parent.hasSuggestions {
+                    parent.onDismissSuggestions()
+                    return true
+                }
                 parent.onInterrupt()
                 return true
             }
@@ -475,8 +484,11 @@ private struct CommandComposer: NSViewRepresentable {
 
         func setHighlightedText(_ text: String, in textView: NSTextView) {
             let selectedRange = textView.selectedRange()
+            let textLength = (text as NSString).length
             textView.textStorage?.setAttributedString(ShellSyntaxHighlighter.attributedCommand(text, fontSize: parent.fontSize, enabled: parent.isEnabled))
-            textView.setSelectedRange(NSRange(location: min(selectedRange.location, (text as NSString).length), length: 0))
+            let location = min(selectedRange.location, textLength)
+            let length = min(selectedRange.length, max(0, textLength - location))
+            textView.setSelectedRange(NSRange(location: location, length: length))
         }
 
         func applyHighlighting() {

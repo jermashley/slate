@@ -5,6 +5,12 @@ import Foundation
 
 @MainActor
 final class BlockSessionController: NSObject, ObservableObject {
+    enum SuggestionMode {
+        case none
+        case completion
+        case history
+    }
+
     @Published var title: String = "Blocks"
     @Published var currentDirectory: String?
     @Published var isRunning: Bool = true
@@ -12,6 +18,7 @@ final class BlockSessionController: NSObject, ObservableObject {
     @Published var blocks: [TerminalBlock] = []
     @Published var draftCommand: String = ""
     @Published var completions: [CompletionSuggestion] = []
+    @Published var suggestionMode: SuggestionMode = .none
     @Published var selectedCompletionIndex: Int = 0
     @Published var followScrollRequest = UUID()
     @Published var focusToken = UUID()
@@ -30,6 +37,8 @@ final class BlockSessionController: NSObject, ObservableObject {
     private var shellIntegrationReady = false
     private var activeBlockID: UUID?
     private var foregroundPollTask: Task<Void, Never>?
+    private var isApplyingHistorySelection = false
+    private var suppressNextDraftChange = false
 
     init(tabID: UUID, settings: SettingsStore) {
         self.tabID = tabID
@@ -62,6 +71,10 @@ final class BlockSessionController: NSObject, ObservableObject {
 
     var isSupportedShell: Bool {
         URL(fileURLWithPath: shell).lastPathComponent == "zsh"
+    }
+
+    var visibleSuggestions: [CompletionSuggestion] {
+        suggestionMode == .none ? [] : completions
     }
 
     func startIfNeeded(settings: SettingsStore) {
@@ -130,30 +143,85 @@ final class BlockSessionController: NSObject, ObservableObject {
     }
 
     func draftDidChange() {
+        if suppressNextDraftChange {
+            suppressNextDraftChange = false
+            return
+        }
+
+        guard !isApplyingHistorySelection else { return }
+
+        if draftCommand.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            if suggestionMode != .history {
+                dismissSuggestions()
+            }
+            return
+        }
+
         completions = BlockCompletionEngine.suggestions(for: CompletionContext(
             text: draftCommand,
             currentDirectory: currentDirectory,
             history: blocks.map(\.command)
         ))
         selectedCompletionIndex = min(selectedCompletionIndex, max(0, completions.count - 1))
+        suggestionMode = completions.isEmpty ? .none : .completion
     }
 
-    func moveCompletionSelection(delta: Int) -> Bool {
-        guard !completions.isEmpty else { return false }
+    func moveSuggestionSelection(delta: Int) -> Bool {
+        if visibleSuggestions.isEmpty, draftCommand.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty, delta < 0 {
+            return showHistorySuggestions()
+        }
+
+        guard !visibleSuggestions.isEmpty else { return false }
         selectedCompletionIndex = (selectedCompletionIndex + delta + completions.count) % completions.count
+        if suggestionMode == .history {
+            applySelectedHistorySuggestionToDraft()
+        }
         return true
     }
 
-    func acceptSelectedCompletion() -> Bool {
-        guard completions.indices.contains(selectedCompletionIndex) else { return false }
+    func acceptSelectedSuggestion() -> Bool {
+        guard visibleSuggestions.indices.contains(selectedCompletionIndex) else { return false }
+        if suggestionMode == .history {
+            applySelectedHistorySuggestionToDraft()
+            dismissSuggestions()
+            focusComposer()
+            return true
+        }
+
         draftCommand = BlockCompletionEngine.apply(completions[selectedCompletionIndex], to: draftCommand)
         draftDidChange()
         focusComposer()
         return true
     }
 
-    func dismissCompletions() {
+    func showHistorySuggestions() -> Bool {
+        var seenCommands = Set<String>()
+        let commands = blocks
+            .map(\.command)
+            .reversed()
+            .filter { seenCommands.insert($0).inserted }
+            .prefix(24)
+            .map {
+                CompletionSuggestion(
+                    title: $0,
+                    detail: "History",
+                    replacement: $0,
+                    kind: .history
+                )
+            }
+
+        guard !commands.isEmpty else { return false }
+        completions = Array(commands)
+        suggestionMode = .history
+        selectedCompletionIndex = 0
+        applySelectedHistorySuggestionToDraft()
+        focusComposer()
+        return true
+    }
+
+    func dismissSuggestions() {
         completions = []
+        suggestionMode = .none
         selectedCompletionIndex = 0
     }
 
@@ -161,7 +229,7 @@ final class BlockSessionController: NSObject, ObservableObject {
         let command = draftCommand.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !command.isEmpty, isSupportedShell, processHost.running else { return }
         draftCommand = ""
-        dismissCompletions()
+        dismissSuggestions()
 
         let block = TerminalBlock(
             command: command,
@@ -219,6 +287,18 @@ final class BlockSessionController: NSObject, ObservableObject {
     func terminate() {
         stopForegroundPolling()
         processHost.terminate()
+    }
+
+    private func applySelectedHistorySuggestionToDraft() {
+        guard suggestionMode == .history,
+              completions.indices.contains(selectedCompletionIndex) else {
+            return
+        }
+        isApplyingHistorySelection = true
+        suppressNextDraftChange = true
+        draftCommand = completions[selectedCompletionIndex].replacement
+        isApplyingHistorySelection = false
+        focusComposer()
     }
 
     private func handleOutput(_ slice: ArraySlice<UInt8>) {
