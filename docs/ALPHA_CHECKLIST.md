@@ -20,7 +20,7 @@ Slate should not be shared as a private alpha until these items are solid.
 - Confirm tabs open, close, and switch reliably.
 - Add active-process close confirmation.
 - Decide whether multiline paste confirmation belongs in the SwiftTerm-backed baseline or a later pass.
-- Reintroduce Block mode only after shell integration and command-group UX are ready.
+- Harden Block Mode shell integration, command composer behavior, persistence, and raw-terminal islands.
 
 ## Release
 

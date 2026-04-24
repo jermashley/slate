@@ -30,6 +30,15 @@ struct SettingsView: View {
             }
 
             Section("Session") {
+                Picker("Default mode", selection: Binding(
+                    get: { settings.sessionStyle },
+                    set: { settings.sessionStyle = $0 }
+                )) {
+                    ForEach(SessionStyle.allCases) { style in
+                        Text(style.title).tag(style)
+                    }
+                }
+
                 TextField("Shell override", text: $settings.shellOverride, prompt: Text(settings.resolvedShell))
                 TextField("Startup directory", text: $settings.startupDirectory, prompt: Text("Home folder"))
 
@@ -47,7 +56,7 @@ struct SettingsView: View {
             }
 
             Section("Status") {
-                Text("Block mode is intentionally out of service in this stabilization build while Classic terminal basics are hardened.")
+                Text("Block Mode is the default for new tabs. It currently supports zsh, saves command metadata locally, and keeps Classic available for compatibility.")
                     .font(.system(size: 12.5))
                     .foregroundStyle(.secondary)
             }

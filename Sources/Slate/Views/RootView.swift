@@ -14,10 +14,22 @@ struct RootView: View {
     var body: some View {
         Group {
             if let tab = workspace.selectedTab {
-                TerminalHostView(controller: tab.controller)
-                    .environmentObject(settings)
-                    .background(Color(nsColor: .textBackgroundColor))
-                    .id(tab.id)
+                switch tab.style {
+                case .classic:
+                    if let controller = tab.classicController {
+                        TerminalHostView(controller: controller)
+                            .environmentObject(settings)
+                            .background(Color(nsColor: .textBackgroundColor))
+                            .id(tab.id)
+                    }
+                case .block:
+                    if let controller = tab.blockController {
+                        BlockSessionView(controller: controller)
+                            .environmentObject(settings)
+                            .background(Color(nsColor: .textBackgroundColor))
+                            .id(tab.id)
+                    }
+                }
             } else {
                 emptyState
             }
@@ -154,19 +166,17 @@ struct RootView: View {
 
 struct TabChip: View {
     @EnvironmentObject private var settings: SettingsStore
-    @ObservedObject private var controller: TerminalSessionController
-    let tab: TerminalTab
+    @ObservedObject private var tab: TerminalTab
     let isSelected: Bool
     let onSelect: () -> Void
     let onClose: () -> Void
     @State private var isHovered = false
 
     init(tab: TerminalTab, isSelected: Bool, onSelect: @escaping () -> Void, onClose: @escaping () -> Void) {
-        self.tab = tab
+        _tab = ObservedObject(wrappedValue: tab)
         self.isSelected = isSelected
         self.onSelect = onSelect
         self.onClose = onClose
-        _controller = ObservedObject(wrappedValue: tab.controller)
     }
 
     var body: some View {
@@ -174,9 +184,9 @@ struct TabChip: View {
             Button(action: onSelect) {
                 HStack(spacing: 7) {
                     Circle()
-                        .fill(controller.isRunning ? Color(nsColor: .systemGreen) : Color(nsColor: .tertiaryLabelColor))
+                        .fill(tabIsRunning ? Color(nsColor: .systemGreen) : Color(nsColor: .tertiaryLabelColor))
                         .frame(width: 6, height: 6)
-                    Text(controller.title)
+                    Text(tab.fallbackTitle)
                         .font(.system(size: 12.5, weight: .medium))
                         .lineLimit(1)
                         .truncationMode(.middle)
@@ -220,6 +230,15 @@ struct TabChip: View {
             Button("Close Tab") {
                 onClose()
             }
+        }
+    }
+
+    private var tabIsRunning: Bool {
+        switch tab.style {
+        case .classic:
+            tab.classicController?.isRunning ?? false
+        case .block:
+            tab.blockController?.isRunning ?? false
         }
     }
 }

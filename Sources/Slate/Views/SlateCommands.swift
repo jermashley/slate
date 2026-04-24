@@ -51,9 +51,15 @@ struct SlateCommands: Commands {
 
         CommandGroup(after: .textEditing) {
             Button("Find in Scrollback") {
-                workspace?.selectedTab?.controller.showFind()
+                workspace?.showFindInSelectedTab()
             }
             .keyboardShortcut("f", modifiers: [.command])
+            .disabled(workspace == nil)
+
+            Button("Clear History") {
+                workspace?.clearSelectedTabHistory()
+            }
+            .keyboardShortcut("k", modifiers: [.command])
             .disabled(workspace == nil)
 
             Divider()

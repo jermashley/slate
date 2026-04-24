@@ -7,7 +7,7 @@ struct SlateApp: App {
 
     var body: some Scene {
         WindowGroup("Slate", id: "main") {
-            SlateWindowRoot()
+            SlateWindowRoot(settings: settings)
                 .environmentObject(settings)
                 .frame(minWidth: 820, minHeight: 520)
                 .onAppear {
@@ -27,7 +27,11 @@ struct SlateApp: App {
 }
 
 private struct SlateWindowRoot: View {
-    @StateObject private var workspace = WorkspaceModel()
+    @StateObject private var workspace: WorkspaceModel
+
+    init(settings: SettingsStore) {
+        _workspace = StateObject(wrappedValue: WorkspaceModel(settings: settings))
+    }
 
     var body: some View {
         RootView()

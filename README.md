@@ -2,7 +2,7 @@
 
 Slate is a native macOS terminal for everyday developers: minimal, refined, local-first, and built for dependable daily use.
 
-This repository currently contains a SwiftTerm-backed stabilization build focused on classic terminal basics:
+This repository currently contains a SwiftTerm-backed stabilization build with Classic terminal basics plus an early Block Mode:
 
 - SwiftUI/AppKit macOS app shell
 - SwiftTerm-backed PTY terminal sessions
@@ -11,6 +11,8 @@ This repository currently contains a SwiftTerm-backed stabilization build focuse
 - curated themes
 - settings for font, shell, startup directory, scrollback, and cursor
 - built-in SwiftTerm find bar via `Cmd-F`
+- Block Mode as the default new-tab experience for zsh, with native command composition and local command metadata persistence
+- Classic Mode as a compatibility fallback for unsupported shells and raw terminal workflows
 - privacy-first posture with no accounts, cloud sync, AI, or behavioral telemetry
 
 ## Build
@@ -70,4 +72,4 @@ zsh Scripts/run_app.sh --rebuild
 
 ## Notes
 
-This build intentionally ships **Classic mode only** while Slate’s daily-driver basics are hardened. Block mode is out of service for now.
+Block Mode is the default for new tabs and currently supports zsh first. Command metadata is saved locally; command output is session-only and is not restored after relaunch.

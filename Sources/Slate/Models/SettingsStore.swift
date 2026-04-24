@@ -10,6 +10,7 @@ final class SettingsStore: ObservableObject {
     @AppStorage("shellOverride") var shellOverride: String = "" { didSet { objectWillChange.send() } }
     @AppStorage("startupDirectory") var startupDirectory: String = "" { didSet { objectWillChange.send() } }
     @AppStorage("scrollbackLimit") var scrollbackLimit: Int = 5_000 { didSet { objectWillChange.send() } }
+    @AppStorage("sessionStyle") var sessionStyleRaw: String = SessionStyle.block.rawValue { didSet { objectWillChange.send() } }
 
     var theme: SlateTheme {
         SlateTheme.system
@@ -18,6 +19,11 @@ final class SettingsStore: ObservableObject {
     var cursorStyle: CursorStyle {
         get { CursorStyle(rawValue: cursorStyleRaw) ?? .block }
         set { cursorStyleRaw = newValue.rawValue }
+    }
+
+    var sessionStyle: SessionStyle {
+        get { SessionStyle(rawValue: sessionStyleRaw) ?? .block }
+        set { sessionStyleRaw = newValue.rawValue }
     }
 
     var resolvedShell: String {

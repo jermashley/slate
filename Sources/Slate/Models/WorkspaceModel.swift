@@ -6,8 +6,8 @@ final class WorkspaceModel: ObservableObject {
     @Published var selectedTabID: TerminalTab.ID?
     @Published var pendingCloseTabID: TerminalTab.ID?
 
-    init() {
-        let initialTab = Self.makeTab()
+    init(settings: SettingsStore) {
+        let initialTab = Self.makeTab(settings: settings)
         tabs = [initialTab]
         selectedTabID = initialTab.id
         installExitHandler(for: initialTab)
@@ -29,7 +29,7 @@ final class WorkspaceModel: ObservableObject {
     }
 
     func newTab(settings: SettingsStore) {
-        let tab = Self.makeTab()
+        let tab = Self.makeTab(settings: settings)
         installExitHandler(for: tab)
         tabs.append(tab)
         selectedTabID = tab.id
@@ -41,7 +41,7 @@ final class WorkspaceModel: ObservableObject {
     }
 
     func requestClose(tab: TerminalTab) {
-        if tab.controller.hasForegroundProcess {
+        if tab.hasForegroundProcess {
             pendingCloseTabID = tab.id
         } else {
             forceClose(tab: tab)
@@ -73,15 +73,31 @@ final class WorkspaceModel: ObservableObject {
     }
 
     func focusSelectedTerminal() {
-        selectedTab?.controller.focus()
+        selectedTab?.focus()
     }
 
-    private static func makeTab() -> TerminalTab {
-        TerminalTab()
+    func showFindInSelectedTab() {
+        switch selectedTab?.style {
+        case .classic:
+            selectedTab?.classicController?.showFind()
+        case .block:
+            selectedTab?.focus()
+        case .none:
+            break
+        }
+    }
+
+    func clearSelectedTabHistory() {
+        selectedTab?.clearHistory()
+        selectedTab?.focus()
+    }
+
+    private static func makeTab(settings: SettingsStore) -> TerminalTab {
+        TerminalTab(style: settings.sessionStyle, settings: settings)
     }
 
     private func installExitHandler(for tab: TerminalTab) {
-        tab.controller.onExit = { [weak self, weak tab] in
+        tab.installExitHandler { [weak self, weak tab] in
             guard let self, let tab else { return }
             self.forceClose(tab: tab, terminate: false)
         }
@@ -90,8 +106,8 @@ final class WorkspaceModel: ObservableObject {
     private func forceClose(tab: TerminalTab, terminate: Bool) {
         guard let index = tabs.firstIndex(where: { $0.id == tab.id }) else { return }
         if terminate {
-            tab.controller.onExit = nil
-            tab.controller.terminate()
+            tab.clearExitHandler()
+            tab.terminate()
         }
         tabs.remove(at: index)
 
