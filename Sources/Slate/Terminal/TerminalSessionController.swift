@@ -48,10 +48,10 @@ final class TerminalSessionController: NSObject, ObservableObject {
             terminalView.removeFromSuperview()
             containerView.addSubview(terminalView)
             NSLayoutConstraint.activate([
-                terminalView.leadingAnchor.constraint(equalTo: containerView.leadingAnchor),
-                terminalView.trailingAnchor.constraint(equalTo: containerView.trailingAnchor),
-                terminalView.topAnchor.constraint(equalTo: containerView.topAnchor),
-                terminalView.bottomAnchor.constraint(equalTo: containerView.bottomAnchor)
+                terminalView.leadingAnchor.constraint(equalTo: containerView.leadingAnchor, constant: 8),
+                terminalView.trailingAnchor.constraint(equalTo: containerView.trailingAnchor, constant: -8),
+                terminalView.topAnchor.constraint(equalTo: containerView.topAnchor, constant: 4),
+                terminalView.bottomAnchor.constraint(equalTo: containerView.bottomAnchor, constant: -6)
             ])
         }
     }

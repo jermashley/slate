@@ -5,6 +5,12 @@ struct RootView: View {
     @EnvironmentObject private var settings: SettingsStore
     @EnvironmentObject private var workspace: WorkspaceModel
 
+    @State private var tabStripWidth: CGFloat = 0
+
+    private let tabMinWidth: CGFloat = 80
+    private let tabMaxWidth: CGFloat = 180
+    private let tabSpacing: CGFloat = 6
+
     var body: some View {
         Group {
             if let tab = workspace.selectedTab {
@@ -19,7 +25,7 @@ struct RootView: View {
         .background(Color(nsColor: .textBackgroundColor))
         .foregroundStyle(Color(nsColor: .textColor))
         .background(
-            WindowConfigurator(accessory: titlebarAccessory)
+            WindowConfigurator(tabBar: tabBarView)
         )
         .onAppear {
             NSApp.activate(ignoringOtherApps: true)
@@ -44,7 +50,7 @@ struct RootView: View {
         }
     }
 
-    private var titlebarAccessory: some View {
+    private var tabBarView: some View {
         HStack(spacing: 10) {
             tabStrip
 
@@ -67,37 +73,60 @@ struct RootView: View {
         }
         .padding(.leading, 10)
         .padding(.trailing, 12)
-        .frame(height: 38)
         .frame(maxWidth: .infinity)
-        .overlay(alignment: .bottom) {
-            Divider()
-        }
     }
 
     private var tabStrip: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 6) {
-                ForEach(workspace.tabs) { tab in
-                    TabChip(
-                        tab: tab,
-                        isSelected: tab.id == workspace.selectedTabID,
-                        onSelect: {
-                            workspace.selectedTabID = tab.id
-                            DispatchQueue.main.async {
-                                workspace.focusSelectedTerminal()
-                            }
-                        },
-                        onClose: {
-                            workspace.selectedTabID = tab.id
-                            workspace.requestClose(tab: tab)
-                        }
-                    )
-                    .environmentObject(settings)
+        let count = CGFloat(workspace.tabs.count)
+        let totalSpacing = max(0, count - 1) * tabSpacing
+        let ideal = tabStripWidth > 0 && count > 0
+            ? (tabStripWidth - totalSpacing) / count
+            : tabMaxWidth
+        let tabWidth = min(tabMaxWidth, max(tabMinWidth, ideal))
+        let needsScroll = ideal < tabMinWidth
+
+        return Group {
+            if needsScroll {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    chipRow(width: tabMinWidth)
                 }
+            } else {
+                chipRow(width: tabWidth)
             }
-            .padding(.vertical, 4)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+        .background {
+            GeometryReader { geo in
+                Color.clear
+                    .onAppear { tabStripWidth = geo.size.width }
+                    .onChange(of: geo.size.width) { _, new in tabStripWidth = new }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func chipRow(width: CGFloat) -> some View {
+        HStack(spacing: tabSpacing) {
+            ForEach(workspace.tabs) { tab in
+                TabChip(
+                    tab: tab,
+                    isSelected: tab.id == workspace.selectedTabID,
+                    onSelect: {
+                        workspace.selectedTabID = tab.id
+                        DispatchQueue.main.async {
+                            workspace.focusSelectedTerminal()
+                        }
+                    },
+                    onClose: {
+                        workspace.selectedTabID = tab.id
+                        workspace.requestClose(tab: tab)
+                    }
+                )
+                .frame(width: width)
+                .environmentObject(settings)
+            }
+        }
+        .padding(.vertical, 4)
     }
 
     private var emptyState: some View {
@@ -145,7 +174,7 @@ struct TabChip: View {
             Button(action: onSelect) {
                 HStack(spacing: 7) {
                     Circle()
-                        .fill(controller.isRunning ? Color.accentColor : Color(nsColor: .tertiaryLabelColor))
+                        .fill(controller.isRunning ? Color(nsColor: .systemGreen) : Color(nsColor: .tertiaryLabelColor))
                         .frame(width: 6, height: 6)
                     Text(controller.title)
                         .font(.system(size: 12.5, weight: .medium))
@@ -164,7 +193,6 @@ struct TabChip: View {
                 }
                 .buttonStyle(.plain)
                 .foregroundStyle(.secondary)
-                .opacity(1)
             } else {
                 Image(systemName: "xmark")
                     .font(.system(size: 10, weight: .semibold))
@@ -174,17 +202,16 @@ struct TabChip: View {
         }
         .padding(.horizontal, 11)
         .frame(height: 26)
-        .frame(width: 220, alignment: .leading)
         .background {
             if isSelected {
-                RoundedRectangle(cornerRadius: 7, style: .continuous)
+                RoundedRectangle(cornerRadius: 8, style: .continuous)
                     .fill(Color(nsColor: .selectedContentBackgroundColor).opacity(0.18))
             } else if isHovered {
-                RoundedRectangle(cornerRadius: 7, style: .continuous)
+                RoundedRectangle(cornerRadius: 8, style: .continuous)
                     .fill(Color(nsColor: .quaternaryLabelColor))
             }
         }
-        .clipShape(RoundedRectangle(cornerRadius: 7, style: .continuous))
+        .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
         .foregroundStyle(isSelected ? .primary : .secondary)
         .onHover { hovering in
             isHovered = hovering
