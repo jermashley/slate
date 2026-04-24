@@ -2,48 +2,59 @@ import SwiftUI
 
 struct SlateCommands: Commands {
     @Environment(\.openSettings) private var openSettings
+    @Environment(\.openWindow) private var openWindow
+    @FocusedObject private var workspace: WorkspaceModel?
     @ObservedObject var settings: SettingsStore
-    @ObservedObject var workspace: WorkspaceModel
 
     var body: some Commands {
         CommandGroup(replacing: .newItem) {
+            Button("New Window") {
+                openWindow(id: "main")
+            }
+            .keyboardShortcut("n", modifiers: [.command])
+
             Button("New Tab") {
-                workspace.newTab(settings: settings)
+                workspace?.newTab(settings: settings)
                 DispatchQueue.main.async {
-                    workspace.focusSelectedTerminal()
+                    workspace?.focusSelectedTerminal()
                 }
             }
             .keyboardShortcut("t", modifiers: [.command])
+            .disabled(workspace == nil)
 
             Button("Close Tab") {
-                workspace.requestCloseSelectedTab()
+                workspace?.requestCloseSelectedTab()
             }
             .keyboardShortcut("w", modifiers: [.command])
+            .disabled(workspace == nil)
         }
 
         CommandMenu("Tab") {
             Button("Next Tab") {
-                workspace.selectNextTab()
+                workspace?.selectNextTab()
                 DispatchQueue.main.async {
-                    workspace.focusSelectedTerminal()
+                    workspace?.focusSelectedTerminal()
                 }
             }
             .keyboardShortcut("]", modifiers: [.command, .shift])
+            .disabled(workspace == nil)
 
             Button("Previous Tab") {
-                workspace.selectPreviousTab()
+                workspace?.selectPreviousTab()
                 DispatchQueue.main.async {
-                    workspace.focusSelectedTerminal()
+                    workspace?.focusSelectedTerminal()
                 }
             }
             .keyboardShortcut("[", modifiers: [.command, .shift])
+            .disabled(workspace == nil)
         }
 
         CommandGroup(after: .textEditing) {
             Button("Find in Scrollback") {
-                workspace.selectedTab?.controller.showFind()
+                workspace?.selectedTab?.controller.showFind()
             }
             .keyboardShortcut("f", modifiers: [.command])
+            .disabled(workspace == nil)
 
             Divider()
 

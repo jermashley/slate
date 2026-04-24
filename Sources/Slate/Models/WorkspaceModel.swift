@@ -2,9 +2,16 @@ import Foundation
 
 @MainActor
 final class WorkspaceModel: ObservableObject {
-    @Published var tabs: [TerminalTab] = []
+    @Published var tabs: [TerminalTab]
     @Published var selectedTabID: TerminalTab.ID?
     @Published var pendingCloseTabID: TerminalTab.ID?
+
+    init() {
+        let initialTab = Self.makeTab()
+        tabs = [initialTab]
+        selectedTabID = initialTab.id
+        installExitHandler(for: initialTab)
+    }
 
     var selectedTab: TerminalTab? {
         guard let selectedTabID else { return tabs.first }
@@ -22,7 +29,8 @@ final class WorkspaceModel: ObservableObject {
     }
 
     func newTab(settings: SettingsStore) {
-        let tab = TerminalTab()
+        let tab = Self.makeTab()
+        installExitHandler(for: tab)
         tabs.append(tab)
         selectedTabID = tab.id
     }
@@ -33,7 +41,7 @@ final class WorkspaceModel: ObservableObject {
     }
 
     func requestClose(tab: TerminalTab) {
-        if tab.controller.isRunning {
+        if tab.controller.hasForegroundProcess {
             pendingCloseTabID = tab.id
         } else {
             forceClose(tab: tab)
@@ -51,16 +59,7 @@ final class WorkspaceModel: ObservableObject {
     }
 
     func forceClose(tab: TerminalTab) {
-        guard let index = tabs.firstIndex(where: { $0.id == tab.id }) else { return }
-        tab.controller.terminate()
-        tabs.remove(at: index)
-
-        if tabs.isEmpty {
-            selectedTabID = nil
-        } else {
-            let nextIndex = min(index, tabs.count - 1)
-            selectedTabID = tabs[nextIndex].id
-        }
+        forceClose(tab: tab, terminate: true)
     }
 
     func selectNextTab() {
@@ -75,5 +74,32 @@ final class WorkspaceModel: ObservableObject {
 
     func focusSelectedTerminal() {
         selectedTab?.controller.focus()
+    }
+
+    private static func makeTab() -> TerminalTab {
+        TerminalTab()
+    }
+
+    private func installExitHandler(for tab: TerminalTab) {
+        tab.controller.onExit = { [weak self, weak tab] in
+            guard let self, let tab else { return }
+            self.forceClose(tab: tab, terminate: false)
+        }
+    }
+
+    private func forceClose(tab: TerminalTab, terminate: Bool) {
+        guard let index = tabs.firstIndex(where: { $0.id == tab.id }) else { return }
+        if terminate {
+            tab.controller.onExit = nil
+            tab.controller.terminate()
+        }
+        tabs.remove(at: index)
+
+        if tabs.isEmpty {
+            selectedTabID = nil
+        } else {
+            let nextIndex = min(index, tabs.count - 1)
+            selectedTabID = tabs[nextIndex].id
+        }
     }
 }

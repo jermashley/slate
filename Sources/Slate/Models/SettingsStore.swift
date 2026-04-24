@@ -3,7 +3,7 @@ import SwiftUI
 
 @MainActor
 final class SettingsStore: ObservableObject {
-    @AppStorage("themeID") var themeID: String = "obsidian" { didSet { objectWillChange.send() } }
+    @AppStorage("themeID") var themeID: String = "system" { didSet { objectWillChange.send() } }
     @AppStorage("fontName") var fontName: String = "SF Mono" { didSet { objectWillChange.send() } }
     @AppStorage("fontSize") var fontSize: Double = 13.5 { didSet { objectWillChange.send() } }
     @AppStorage("cursorStyle") var cursorStyleRaw: String = CursorStyle.block.rawValue { didSet { objectWillChange.send() } }
@@ -12,7 +12,7 @@ final class SettingsStore: ObservableObject {
     @AppStorage("scrollbackLimit") var scrollbackLimit: Int = 5_000 { didSet { objectWillChange.send() } }
 
     var theme: SlateTheme {
-        SlateTheme.theme(for: themeID)
+        SlateTheme.system
     }
 
     var cursorStyle: CursorStyle {

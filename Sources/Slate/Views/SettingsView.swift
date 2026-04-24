@@ -6,11 +6,9 @@ struct SettingsView: View {
     var body: some View {
         Form {
             Section("Appearance") {
-                Picker("Theme", selection: $settings.themeID) {
-                    ForEach(SlateTheme.all) { theme in
-                        Text(theme.name).tag(theme.id)
-                    }
-                }
+                Text("Slate follows the system light and dark appearance.")
+                    .font(.system(size: 12.5))
+                    .foregroundStyle(.secondary)
 
                 TextField("Font", text: $settings.fontName)
 

@@ -10,7 +10,18 @@ struct SlateTheme: Identifiable, Hashable {
     let accent: Color
     let selection: Color
 
+    static let system = SlateTheme(
+        id: "system",
+        name: "System",
+        background: Color(nsColor: .textBackgroundColor),
+        foreground: Color(nsColor: .textColor),
+        muted: Color(nsColor: .secondaryLabelColor),
+        accent: Color.accentColor,
+        selection: Color(nsColor: .selectedTextBackgroundColor)
+    )
+
     static let all: [SlateTheme] = [
+        system,
         SlateTheme(
             id: "obsidian",
             name: "Obsidian",
@@ -62,9 +73,23 @@ struct SlateTheme: Identifiable, Hashable {
         all.first { $0.id == id } ?? all[0]
     }
 
-    var nsBackground: NSColor { NSColor(background) }
-    var nsForeground: NSColor { NSColor(foreground) }
-    var nsMuted: NSColor { NSColor(muted) }
-    var nsAccent: NSColor { NSColor(accent) }
-    var nsSelection: NSColor { NSColor(selection) }
+    var nsBackground: NSColor {
+        id == "system" ? .textBackgroundColor : NSColor(background)
+    }
+
+    var nsForeground: NSColor {
+        id == "system" ? .textColor : NSColor(foreground)
+    }
+
+    var nsMuted: NSColor {
+        id == "system" ? .secondaryLabelColor : NSColor(muted)
+    }
+
+    var nsAccent: NSColor {
+        id == "system" ? .controlAccentColor : NSColor(accent)
+    }
+
+    var nsSelection: NSColor {
+        id == "system" ? .selectedTextBackgroundColor : NSColor(selection)
+    }
 }

@@ -4,22 +4,18 @@ import SwiftUI
 @main
 struct SlateApp: App {
     @StateObject private var settings = SettingsStore()
-    @StateObject private var workspace = WorkspaceModel()
 
     var body: some Scene {
-        WindowGroup {
-            RootView()
+        WindowGroup("Slate", id: "main") {
+            SlateWindowRoot()
                 .environmentObject(settings)
-                .environmentObject(workspace)
                 .frame(minWidth: 820, minHeight: 520)
                 .onAppear {
-                    workspace.ensureInitialTab(settings: settings)
                     NSApp.activate(ignoringOtherApps: true)
                 }
         }
-        .windowStyle(.hiddenTitleBar)
         .commands {
-            SlateCommands(settings: settings, workspace: workspace)
+            SlateCommands(settings: settings)
         }
 
         Settings {
@@ -27,5 +23,15 @@ struct SlateApp: App {
                 .environmentObject(settings)
                 .frame(width: 520)
         }
+    }
+}
+
+private struct SlateWindowRoot: View {
+    @StateObject private var workspace = WorkspaceModel()
+
+    var body: some View {
+        RootView()
+            .environmentObject(workspace)
+            .focusedSceneObject(workspace)
     }
 }

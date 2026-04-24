@@ -6,26 +6,23 @@ struct RootView: View {
     @EnvironmentObject private var workspace: WorkspaceModel
 
     var body: some View {
-        ZStack(alignment: .top) {
-            Group {
-                if let tab = workspace.selectedTab {
-                    TerminalHostView(controller: tab.controller)
-                        .environmentObject(settings)
-                        .background(settings.theme.background)
-                        .id(tab.id)
-                } else {
-                    emptyState
-                }
+        Group {
+            if let tab = workspace.selectedTab {
+                TerminalHostView(controller: tab.controller)
+                    .environmentObject(settings)
+                    .background(Color(nsColor: .textBackgroundColor))
+                    .id(tab.id)
+            } else {
+                emptyState
             }
-            .padding(.top, 44)
-
-            topBar
         }
-        .background(settings.theme.background)
-        .foregroundStyle(settings.theme.foreground)
-        .ignoresSafeArea(.container, edges: .top)
+        .background(Color(nsColor: .textBackgroundColor))
+        .foregroundStyle(Color(nsColor: .textColor))
         .background(
-            WindowConfigurator(backgroundColor: settings.theme.nsBackground)
+            WindowConfigurator(
+                backgroundColor: .windowBackgroundColor,
+                accessory: titlebarAccessory
+            )
         )
         .onAppear {
             NSApp.activate(ignoringOtherApps: true)
@@ -50,38 +47,36 @@ struct RootView: View {
         }
     }
 
-    private var topBar: some View {
-        ZStack(alignment: .top) {
-            HStack(spacing: 10) {
-                tabStrip
+    private var titlebarAccessory: some View {
+        HStack(spacing: 10) {
+            tabStrip
 
-                Spacer(minLength: 8)
+            Spacer(minLength: 10)
 
-                Button {
-                    workspace.newTab(settings: settings)
-                    DispatchQueue.main.async {
-                        workspace.focusSelectedTerminal()
-                    }
-                } label: {
-                    Image(systemName: "plus")
-                        .frame(width: 24, height: 24)
+            Button {
+                workspace.newTab(settings: settings)
+                DispatchQueue.main.async {
+                    workspace.focusSelectedTerminal()
                 }
-                .buttonStyle(.plain)
-                .foregroundStyle(settings.theme.muted)
-                .help("New Tab")
+            } label: {
+                Image(systemName: "plus")
+                    .font(.system(size: 14, weight: .medium))
+                    .frame(width: 26, height: 26)
             }
-            .padding(.leading, 86)
-            .padding(.trailing, 14)
-            .frame(height: 42)
-
-            VStack(spacing: 0) {
-                Spacer()
-                Divider()
-                    .opacity(0.25)
-            }
-            .frame(height: 42)
+            .buttonStyle(.plain)
+            .foregroundStyle(.secondary)
+            .contentShape(Circle())
+            .help("New Tab")
         }
-        .background(settings.theme.background.opacity(0.98))
+        .padding(.leading, 10)
+        .padding(.trailing, 12)
+        .frame(height: 38)
+        .frame(maxWidth: .infinity)
+        .background(.bar)
+        .slateTitlebarGlass()
+        .overlay(alignment: .bottom) {
+            Divider().opacity(0.18)
+        }
     }
 
     private var tabStrip: some View {
@@ -105,6 +100,7 @@ struct RootView: View {
                     .environmentObject(settings)
                 }
             }
+            .padding(.vertical, 4)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
     }
@@ -132,6 +128,17 @@ struct RootView: View {
     }
 }
 
+private extension View {
+    @ViewBuilder
+    func slateTitlebarGlass() -> some View {
+        if #available(macOS 26.0, *) {
+            self.glassEffect(in: Rectangle())
+        } else {
+            self
+        }
+    }
+}
+
 struct TabChip: View {
     @EnvironmentObject private var settings: SettingsStore
     @ObservedObject private var controller: TerminalSessionController
@@ -154,12 +161,14 @@ struct TabChip: View {
             Button(action: onSelect) {
                 HStack(spacing: 7) {
                     Circle()
-                        .fill(controller.isRunning ? settings.theme.accent : settings.theme.muted)
+                        .fill(controller.isRunning ? Color.accentColor : Color(nsColor: .tertiaryLabelColor))
                         .frame(width: 6, height: 6)
                     Text(controller.title)
                         .font(.system(size: 12.5, weight: .medium))
                         .lineLimit(1)
+                        .truncationMode(.middle)
                 }
+                .frame(maxWidth: .infinity, alignment: .leading)
             }
             .buttonStyle(.plain)
 
@@ -170,7 +179,7 @@ struct TabChip: View {
                         .frame(width: 16, height: 16)
                 }
                 .buttonStyle(.plain)
-                .foregroundStyle(settings.theme.muted)
+                .foregroundStyle(.secondary)
                 .opacity(1)
             } else {
                 Image(systemName: "xmark")
@@ -180,10 +189,19 @@ struct TabChip: View {
             }
         }
         .padding(.horizontal, 11)
-        .frame(height: 28)
-        .background(isSelected ? settings.theme.selection.opacity(0.9) : Color.clear)
+        .frame(height: 26)
+        .frame(width: 220, alignment: .leading)
+        .background {
+            if isSelected {
+                RoundedRectangle(cornerRadius: 7, style: .continuous)
+                    .fill(Color(nsColor: .selectedControlColor).opacity(0.28))
+            } else if isHovered {
+                RoundedRectangle(cornerRadius: 7, style: .continuous)
+                    .fill(Color(nsColor: .controlBackgroundColor).opacity(0.5))
+            }
+        }
         .clipShape(RoundedRectangle(cornerRadius: 7, style: .continuous))
-        .foregroundStyle(isSelected ? settings.theme.foreground : settings.theme.muted)
+        .foregroundStyle(isSelected ? .primary : .secondary)
         .onHover { hovering in
             isHovered = hovering
         }
